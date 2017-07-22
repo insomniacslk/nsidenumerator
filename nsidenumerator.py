@@ -76,7 +76,8 @@ def main():
             if opt.otype == dns.edns.NSID:
                 servers.add(opt.data)
 
-    print('Found {} servers:'.format(len(servers)))
+    hint = '' if len(servers) > 0 else ' (target not supporting NSID?)'
+    print('Found {} servers{}'.format(len(servers), hint))
     for server in sorted(servers):
         print(server)
 
