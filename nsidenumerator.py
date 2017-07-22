@@ -50,6 +50,7 @@ def main():
     args = parse_args()
     try:
         ipaddress.ip_address(args.target)
+        target = args.target
     except ValueError:
         target = resolve(args.target)
     q = dns.message.make_query(args.qname, dns.rdatatype.A, dns.rdataclass.IN)
@@ -65,8 +66,10 @@ def main():
     servers = set()
     for sport in range(start_sport, end_sport + 1):
         if args.verbose:
-            print('DNS query to {}({}). Qname: {!r}, sport: {}, dport: {}, timeout {}'.format(
-            args.target, target, args.qname, sport, args.dport, args.timeout))
+            print('DNS query to {}({}). Qname: {!r}, sport: {}, dport: {}, '
+                  'timeout {}'.format(
+                      args.target, target, args.qname, sport, args.dport,
+                      args.timeout))
         ans = dns.query.udp(q, target, timeout=args.timeout,
                 source_port=sport, port=args.dport)
         for opt in ans.options:
