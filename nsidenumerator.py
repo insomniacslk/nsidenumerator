@@ -23,7 +23,10 @@ def parse_args():
         '-n', '--qname', default='.',
         help='The DNS name to query for. Default: %(default)r')
     parser.add_argument(
-        '-t', '--timeout', type=float, default=1.,
+        '-t', '--qtype', default='A',
+        help='Query type to use. Default: %(default)s')
+    parser.add_argument(
+        '-T', '--timeout', type=float, default=1.,
         help='Timeout before the DNS request expires')
     parser.add_argument('-s', '--sport', type=int, default=12345,
         help='The UDP source port to use for the query. '
@@ -59,7 +62,10 @@ def main():
         target = args.target
     except ValueError:
         target = resolve(args.target)
-    q = dns.message.make_query(args.qname, dns.rdatatype.A, dns.rdataclass.IN)
+    q = dns.message.make_query(
+        args.qname,
+        dns.rdatatype.from_text(args.qtype),
+        dns.rdataclass.IN)
     q.use_edns(payload=4096, options=[dns.edns.GenericOption(dns.edns.NSID, b'')])
 
     start_sport = args.sport
@@ -75,10 +81,10 @@ def main():
     timeouts = 0
     for sport in range(start_sport, end_sport + 1):
         if args.verbose:
-            print('DNS query to {}({}). Qname: {!r}, sport: {}, dport: {}, '
-                  'timeout {}'.format(
-                      args.target, target, args.qname, sport, args.dport,
-                      args.timeout))
+            print('DNS query to {}({}). Qname: {!r}, qtype: {}, '
+                  'sport: {}, dport: {}, timeout {}'.format(
+                      args.target, target, args.qname, args.qtype,
+                      sport, args.dport, args.timeout))
         total_queries += 1
         try:
             ans = dns.query.udp(q, target, timeout=args.timeout,
