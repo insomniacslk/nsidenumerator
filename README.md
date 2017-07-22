@@ -5,6 +5,9 @@ As simple as that: run DNS queries towards an anycast-enabled, NSID-enabled DNS 
 (Equal-Cost MultiPath) for the enumeration.
 Requires root privileges to set the custom UDP source port.
 
+This tool uses NSID to get the backend server name, which is in-band in any regular DNS
+query. It does not use `server.id.` or similar CHAOS/TXT queries.
+
 ## Dependencies
 
 * Python 3
