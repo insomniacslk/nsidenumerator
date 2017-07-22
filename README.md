@@ -3,7 +3,6 @@
 As simple as that: run DNS queries towards an anycast-enabled, NSID-enabled DNS server
 (e.g. the root servers) to know what the backend servers are. Leverage ECMP
 (Equal-Cost MultiPath) for the enumeration.
-Requires root privileges to set the custom UDP source port.
 
 This tool uses NSID to get the backend server name, which is in-band in any regular DNS
 query. It does not use `server.id.` or similar CHAOS/TXT queries.
@@ -19,7 +18,7 @@ query. It does not use `server.id.` or similar CHAOS/TXT queries.
 
 Enumerate the backend servers behind `k.root-servers.net.` using 10 paths:
 ```
-$ sudo ./nsidenumerator.py $(dig +short k.root-servers.net.) -e 10
+$ ./nsidenumerator.py k.root-servers.net -e 10
 Enumerating 10 paths
 Found 3 servers:
 b'ns1.nl-ams.k.ripe.net'
@@ -32,10 +31,10 @@ b'ns3.nl-ams.k.ripe.net'
 One query (hence one path and one backend server), source port 12345:
 
 ```
-$ sudo ./nsidenumerator.py $(dig +short k.root-servers.net.) -v
-DNS query to 193.0.14.129. Qname: '.', sport: 12345, dport: 53, timeout 1.0
+$ ./nsidenumerator.py k.root-servers.net -v
+DNS query to k.root-servers.net(193.0.14.129). Qname: '.', sport: 12345, dport: 53, timeout 1.0
 Found 1 servers:
-b'ns2.nl-ams.k.ripe.net'
+b'ns3.nl-ams.k.ripe.net'
 ```
 
 ## Usage
@@ -47,7 +46,7 @@ usage: nsidenumerator.py [-h] [-q QNAME] [-t TIMEOUT] [-s SPORT] [-d DPORT]
                          target
 
 positional arguments:
-  target                The target DNS server. Default: 193.0.14.129
+  target                The target DNS server.
 
 optional arguments:
   -h, --help            show this help message and exit
