@@ -99,8 +99,10 @@ def main():
     if not args.quiet:
         print()
         print('Statistics:')
-        print('Total DNS queries: {}'.format(total_queries))
-        print('Timeouts         : {}'.format(timeouts))
+        print('Total DNS queries      : {}'.format(total_queries))
+        print('Timeouts               : {}'.format(timeouts))
+        print('Percent failed queries : {:.2f}'.format(
+            (timeouts / total_queries) * 100))
 
 
 if __name__ == '__main__':
