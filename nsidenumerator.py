@@ -6,9 +6,11 @@ Enumerate DNS servers behind anycast VIPs using the NSID EDNS extension
 '''
 
 import argparse
+import ipaddress
 
 import dns.query
 import dns.message
+import dns.resolver
 import dns.rdatatype
 import dns.rdataclass
 
@@ -16,11 +18,10 @@ import dns.rdataclass
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'target', default='193.0.14.129',
-        help='The target DNS server. Default: %(default)s')
+        'target', help='The target DNS server.')
     parser.add_argument(
         '-q', '--qname', default='.',
-        help='The DNS name to query for. Default: %(default)s')
+        help='The DNS name to query for. Default: %(default)r')
     parser.add_argument(
         '-t', '--timeout', type=float, default=1.,
         help='Timeout before the DNS request expires')
@@ -38,8 +39,19 @@ def parse_args():
     return parser.parse_args()
 
 
+def resolve(name, qtype='A'):
+    # return the first one, if any. If you want more control, use explicit IPs
+    for ans in dns.resolver.query(name, qtype).response.answer:
+        return ans.items[0].to_text()
+    return ''
+
+
 def main():
     args = parse_args()
+    try:
+        ipaddress.ip_address(args.target)
+    except ValueError:
+        target = resolve(args.target)
     q = dns.message.make_query(args.qname, dns.rdatatype.A, dns.rdataclass.IN)
     q.use_edns(payload=4096, options=[dns.edns.GenericOption(dns.edns.NSID, b'')])
 
@@ -53,9 +65,9 @@ def main():
     servers = set()
     for sport in range(start_sport, end_sport + 1):
         if args.verbose:
-            print('DNS query to {}. Qname: {!r}, sport: {}, dport: {}, timeout {}'.format(
-            args.target, args.qname, sport, args.dport, args.timeout))
-        ans = dns.query.udp(q, args.target, timeout=args.timeout,
+            print('DNS query to {}({}). Qname: {!r}, sport: {}, dport: {}, timeout {}'.format(
+            args.target, target, args.qname, sport, args.dport, args.timeout))
+        ans = dns.query.udp(q, target, timeout=args.timeout,
                 source_port=sport, port=args.dport)
         for opt in ans.options:
             if opt.otype == dns.edns.NSID:
