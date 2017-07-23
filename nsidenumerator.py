@@ -110,12 +110,14 @@ def main():
                 if item.rdtype == dns.rdatatype.TXT and \
                         item.rdclass == dns.rdataclass.CH:
                     ids.append(b''.join(item.strings))
-        if len(set(ids)) != 1:
-            print('Warning: expected one id.server. response, got {}'.format(
-                len(set(ids))))
-            id_server = None
-        else:
-            id_server = ids[0]
+        if args.id_server:
+            if len(set(ids)) != 1:
+                if not args.quiet:
+                    print('Warning: expected one id.server. response, got {}'.format(
+                        len(set(ids))))
+                id_server = None
+            else:
+                id_server = ids[0]
         warnings = []
         for opt in response.options:
             if opt.otype == dns.edns.NSID:
