@@ -5,6 +5,7 @@ Enumerate DNS servers behind anycast VIPs using the NSID EDNS extension
 (RFC 5001)
 '''
 
+import sys
 import argparse
 import ipaddress
 
@@ -53,7 +54,8 @@ def parse_args():
     if args.verbose is True and args.quiet is True:
         raise parser.error('--quiet and --verbose are mutually exclusive')
     if args.id_server is True:
-        print('Warning: using --id-server overrides qname, qclass and qtype')
+        print('Warning: using --id-server overrides qname, qclass and qtype',
+            file=sys.stderr)
         args.qname = 'id.server.'
         args.qtype = 'TXT'
         args.qclass = 'CH'
@@ -114,7 +116,8 @@ def main():
             if len(set(ids)) != 1:
                 if not args.quiet:
                     print('Warning: expected one id.server. response, got {}'.format(
-                        len(set(ids))))
+                        len(set(ids))),
+                        file=sys.stderr)
                 id_server = None
             else:
                 id_server = ids[0]
