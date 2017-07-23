@@ -79,7 +79,7 @@ def main():
     servers = set()
     total_queries = 0
     timeouts = 0
-    for sport in range(start_sport, end_sport + 1):
+    for sport in range(start_sport, end_sport):
         if args.verbose:
             print('DNS query to {}({}). Qname: {!r}, qtype: {}, '
                   'sport: {}, dport: {}, timeout {}'.format(
