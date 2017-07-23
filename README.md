@@ -5,7 +5,7 @@ As simple as that: run DNS queries towards an anycast-enabled, NSID-enabled DNS 
 (Equal-Cost MultiPath) for the enumeration.
 
 This tool uses NSID to get the backend server name, which is in-band in any regular DNS
-query. It does not use `server.id.` or similar CHAOS/TXT queries.
+query. See `--id-server` if you want to also run a CHAOS/TXT `id.server.` query.
 
 ## Dependencies
 
