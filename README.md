@@ -26,7 +26,7 @@ b'ns2.nl-ams.k.ripe.net'
 b'ns3.nl-ams.k.ripe.net'
 
 Statistics:
-Total DNS queries      : 11
+Total DNS queries      : 10
 Timeouts               : 0
 Percent failed queries : 0.00
 ```
