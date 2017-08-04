@@ -1,5 +1,7 @@
 #!/bin/bash
 
+exec 1>&2
+
 FILES=$(git diff --name-only HEAD)
 for file in $FILES
 do
