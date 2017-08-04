@@ -39,8 +39,7 @@ def parse_args():
         help='The UDP destination port to use for the query. '
         'Default: %(default)s')
     parser.add_argument('-e', '--enumerate', type=int,
-        help='Enumerate DNS servers using the specified number of paths. '
-        'Default: %(default)s')
+        help='Enumerate DNS servers using the specified number of paths. ')
     parser.add_argument(
         '-I', '--id-server', action='store_true', default=False,
         help='Run a CHAOS TXT id.server. query along with NSID, and match the '
@@ -96,7 +95,7 @@ def main():
     for sport in range(start_sport, end_sport):
         if args.verbose:
             print('DNS query to {}({}). Qname: {!r}, qtype: {}, '
-                'qclass: {}, sport: {}, dport: {}, timeout {}'.format(
+                  'qclass: {}, sport: {}, dport: {}, timeout {}'.format(
                       args.target, target, args.qname, args.qtype, args.qclass,
                       sport, args.dport, args.timeout))
         total_queries += 1
