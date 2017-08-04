@@ -4,7 +4,10 @@ FILES=$(git diff --name-only HEAD)
 for file in $FILES
 do
     extension="${file##*.}"
-    if [ ! "x$extension" = "xpy" ]; then continue; fi
-    mypy --ignore-missing-imports $file || (echo "mypy failed on $file" ; exit 1)
+    if [ "x$extension" = "xpy" ]; then
+        mypy --ignore-missing-imports "$file" || (echo "mypy failed on $file" ; exit 1)
+    elif [ "x$extension" = "xgo" ]; then
+        gofmt "$file"
+    fi
 done
 
