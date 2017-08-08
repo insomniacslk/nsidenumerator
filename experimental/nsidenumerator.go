@@ -17,8 +17,6 @@ import (
 	"time"
 )
 
-// TODO: fix -id_server
-
 func removeDuplicates(elements []string) []string {
 	elemap := make(map[string]bool)
 	var ret []string
@@ -89,7 +87,13 @@ func resolve(address *string, ip_version int) (*net.IP, error) {
 		}
 	}
 	// if we are here, no suitable IP was found, let's return an error
-	return nil, errors.New(fmt.Sprintf("No valid IP found for %v", address))
+	var v string
+	if ip_version == 0 {
+		v = ""
+	} else {
+		v = fmt.Sprintf("v%d", ip_version)
+	}
+	return nil, errors.New(fmt.Sprintf("No valid IP%v found for %v", v, *address))
 }
 
 type Probe struct {
