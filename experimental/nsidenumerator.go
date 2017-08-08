@@ -65,7 +65,6 @@ func resolve(address *string, ip_version int) (*net.IP, error) {
 			return nil, errors.New(fmt.Sprintf("Invalid IPv6: %v", ip))
 		}
 	}
-	log.Printf("Address is not an IP. Trying to resolve it: %s", *address)
 	ips, err := net.LookupHost(*address)
 	if err != nil {
 		return nil, err
