@@ -1,4 +1,4 @@
-package nsidenumerator
+package main
 
 import (
 	"context"
