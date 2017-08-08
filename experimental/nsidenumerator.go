@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	// pending https://github.com/miekg/dns/pull/502
 	"github.com/insomniacslk/dns"
 	"log"
 	"net"
@@ -15,6 +16,8 @@ import (
 	"sync"
 	"time"
 )
+
+// TODO: fix -id_server
 
 func removeDuplicates(elements []string) []string {
 	elemap := make(map[string]bool)
