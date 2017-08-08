@@ -9,6 +9,7 @@ import (
 	"github.com/insomniacslk/dns"
 	"log"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -100,7 +101,7 @@ type Probe struct {
 
 func (p *Probe) String() string {
 	return fmt.Sprintf(
-		"Probe(qname='%v', qtype='%v', qclass='%v', resolver=%v, sourcePort=%v, destPort=%v)",
+		"Probe(qname='%v', qtype='%v', qclass='%v', resolver='%v', sourcePort=%v, destPort=%v)",
 		p.qname, dns.TypeToString[p.qtype], dns.ClassToString[p.qclass], p.resolver, p.sourcePort, p.destPort,
 	)
 }
@@ -279,6 +280,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	sort.Strings(servers)
 	for idx, nsid := range servers {
 		if *quiet {
 			fmt.Println(nsid)
