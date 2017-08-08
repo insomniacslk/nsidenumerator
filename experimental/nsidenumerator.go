@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -10,9 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
-
-// TODO implement timeout
 
 func removeDuplicates(elements []string) []string {
 	elemap := make(map[string]bool)
@@ -64,13 +64,25 @@ func resolve(target *string) (*string, error) {
 	return &ips[0], nil
 }
 
-type ProbeResult struct {
-	Nsids []string
-	Err   error
+type Probe struct {
+	client     *dns.Client
+	qname      string
+	qtype      uint16
+	qclass     uint16
+	resolver   string
+	sourcePort uint16
+	destPort   uint16
 }
 
-func sendProbe(client *dns.Client, qname string, qtype, qclass uint16, target string, sourcePort, destPort uint16) ([]string, error) {
-	remoteAddr := net.JoinHostPort(target, strconv.Itoa(int(destPort)))
+func (p *Probe) String() string {
+	return fmt.Sprintf(
+		"Probe(qname='%v', qtype='%v', qclass='%v', resolver=%v, sourcePort=%v, destPort=%v)",
+		p.qname, dns.TypeToString[p.qtype], dns.ClassToString[p.qclass], p.resolver, p.sourcePort, p.destPort,
+	)
+}
+
+func (p *Probe) Send() ([]string, error) {
+	remoteAddr := net.JoinHostPort(p.resolver, strconv.Itoa(int(p.destPort)))
 	msg := &dns.Msg{
 		MsgHdr: dns.MsgHdr{
 			RecursionDesired: true,
@@ -78,6 +90,7 @@ func sendProbe(client *dns.Client, qname string, qtype, qclass uint16, target st
 		},
 		Question: make([]dns.Question, 1),
 	}
+	p.client.LocalAddr = &net.UDPAddr{IP: nil, Port: int(p.sourcePort), Zone: ""}
 	opt := &dns.OPT{
 		Hdr: dns.RR_Header{
 			Name:   ".",
@@ -90,8 +103,10 @@ func sendProbe(client *dns.Client, qname string, qtype, qclass uint16, target st
 	opt.Option = append(opt.Option, ext)
 	opt.SetUDPSize(dns.DefaultMsgSize)
 	msg.Extra = append(msg.Extra, opt)
-	msg.Question[0] = dns.Question{Name: dns.Fqdn(qname), Qtype: qtype, Qclass: qclass}
-	resp, _, err := client.Exchange(msg, remoteAddr, fmt.Sprintf(":%d", sourcePort))
+	msg.Question[0] = dns.Question{Name: dns.Fqdn(p.qname), Qtype: p.qtype, Qclass: p.qclass}
+	var ctx context.Context
+	ctx, _ = context.WithTimeout(context.Background(), timeout)
+	resp, _, err := p.client.ExchangeContext(ctx, msg, remoteAddr)
 	if err != nil {
 		log.Fatalf("DNS query failed: %v", err)
 	}
@@ -108,8 +123,8 @@ var qtype_s = flag.String("qtype", "A", "The DNS query type to use")
 var qtype uint16
 var qclass_s = flag.String("qclass", "IN", "The DNS query class to use")
 var qclass uint16
-var timeout_i = flag.Int("timeout", 1, "The time to wait for a DNS response")
-var timeout uint16
+var timeout_i = flag.Int("timeout", 1000, "The milliseconds to wait for a DNS response")
+var timeout time.Duration
 var sport_i = flag.Int("sport", 12345, "The base source port to use for the probes")
 var sport uint16
 var dport_i = flag.Int("dport", 53, "The destination port to use for the probes")
@@ -151,7 +166,7 @@ func initArgs() {
 	if *timeout_i < 1 || *timeout_i > 0xffff {
 		log.Fatalf("Timeout must be a number between 1 and 65535")
 	}
-	timeout = uint16(*timeout_i)
+	timeout = time.Duration(*timeout_i * 1000000)
 	if *sport_i < 1 || *sport_i > 0xffff {
 		log.Fatalf("Source port must be a number between 1 and 65535")
 	}
@@ -169,9 +184,7 @@ func initArgs() {
 	}
 }
 
-func ProbeServers(qname string, qtype, qclass uint16, resolver_ip string, baseSourcePort, destPort uint16, paths uint8) ([]string, error) {
-	client := new(dns.Client)
-	client.Net = "udp"
+func ProbeServers(qname string, qtype, qclass uint16, resolver_ip string, baseSourcePort, destPort uint16, paths uint8, timeout time.Duration) ([]string, error) {
 	var wg sync.WaitGroup
 	wg.Add(int(paths))
 	results := make(chan []string)
@@ -179,7 +192,10 @@ func ProbeServers(qname string, qtype, qclass uint16, resolver_ip string, baseSo
 	for sourcePort = baseSourcePort; sourcePort < baseSourcePort+uint16(paths); sourcePort++ {
 		go func(sourcePort uint16) {
 			defer wg.Done()
-			nsids, err := sendProbe(client, qname, qtype, qclass, resolver_ip, sourcePort, destPort)
+			client := new(dns.Client)
+			client.Net = "udp"
+			probe := Probe{client: client, qname: qname, qtype: qtype, qclass: qclass, resolver: *resolver, sourcePort: sourcePort, destPort: destPort}
+			nsids, err := probe.Send()
 			if err != nil {
 				log.Print(err)
 				return
@@ -214,11 +230,11 @@ func main() {
 		plural = "s"
 	}
 	if !*quiet {
-		log.Printf("Enumerating %d path%s on %s(%s):%d with base source port %d and timeout %ds",
+		log.Printf("Enumerating %d path%s on %s(%s):%d with base source port %d and timeout %v",
 			paths, plural, *resolver, *resolver_ip, dport, sport, timeout)
 	}
 
-	servers, err := ProbeServers(*qname, qtype, qclass, *resolver, sport, dport, paths)
+	servers, err := ProbeServers(*qname, qtype, qclass, *resolver, sport, dport, paths, timeout)
 	if err != nil {
 		panic(err)
 	}
