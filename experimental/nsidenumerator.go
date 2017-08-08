@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/insomniacslk/dns"
@@ -49,19 +50,43 @@ func extractNSIDs(msg *dns.Msg) ([]string, error) {
 	return nsids, nil
 }
 
-func resolve(target *string) (*string, error) {
-	if i := net.ParseIP(*target); i != nil {
-		return target, nil
+func resolve(address *string, ip_version int) (*net.IP, error) {
+	if ip_version != 0 && ip_version != 4 && ip_version != 6 {
+		return nil, errors.New(fmt.Sprintf("Invalid IP version: %v", ip_version))
 	}
-	log.Printf("Target is not an IP. Trying to resolve it: %s", *target)
-	ips, err := net.LookupHost(*target)
+	if ip := net.ParseIP(*address); ip != nil {
+		if ip_version == 0 {
+			return &ip, nil
+		}
+		if ip_version == 4 && ip.To4() == nil {
+			return nil, errors.New(fmt.Sprintf("Invalid IPv4: %v", ip))
+		}
+		if ip_version == 6 && ip.To4() != nil {
+			return nil, errors.New(fmt.Sprintf("Invalid IPv6: %v", ip))
+		}
+	}
+	log.Printf("Address is not an IP. Trying to resolve it: %s", *address)
+	ips, err := net.LookupHost(*address)
 	if err != nil {
 		return nil, err
 	}
-	if len(ips) > 1 {
-		log.Printf("More than one IP associated to %s, using the first one", *target)
+	for _, ip_s := range ips {
+		ip := net.ParseIP(ip_s)
+		if ip == nil {
+			return nil, errors.New(fmt.Sprintf("Invalid IP: %v", ip))
+		}
+		if ip_version == 0 {
+			return &ip, nil
+		}
+		if ip_version == 4 && ip.To4() != nil {
+			return &ip, nil
+		}
+		if ip_version == 6 && ip.To4() == nil {
+			return &ip, nil
+		}
 	}
-	return &ips[0], nil
+	// if we are here, no suitable IP was found, let's return an error
+	return nil, errors.New(fmt.Sprintf("No valid IP found for %v", address))
 }
 
 type Probe struct {
@@ -133,6 +158,8 @@ var paths_i = flag.Int("paths", 1, "The number of paths to enumerate")
 var paths uint8
 var id_server = flag.Bool("id_server", false,
 	"Use this preset to run a CHAOS TXT id.server. query with NSID")
+var v4 = flag.Bool("4", false, "Force IPv4")
+var v6 = flag.Bool("6", false, "Force IPv6")
 
 //var verbose = flag.Bool("verbose", false, "Print verbose output")
 var quiet = flag.Bool("quiet", false, "Print minimal information")
@@ -147,7 +174,7 @@ func initArgs() {
 			log.Fatal("Cannot use --verbose and --quiet together")
 		}
 	*/
-	if *id_server {
+	if *id_server && !*quiet {
 		log.Printf("Warning: using --id-server overrides --qname, --qclass and --qtype")
 		*qname = "id.server."
 		*qtype_s = "TXT"
@@ -182,18 +209,27 @@ func initArgs() {
 	if uint32(sport)+uint32(paths) > 0xffff {
 		log.Fatalf("Source port + paths must be <= 65535")
 	}
+	if *v4 && *v6 {
+		log.Fatalf("Cannof force both IPv4 and IPv6")
+	}
 }
 
-func ProbeServers(qname string, qtype, qclass uint16, resolver_ip string, baseSourcePort, destPort uint16, paths uint8, timeout time.Duration) ([]string, error) {
+func ProbeServers(qname string, qtype, qclass uint16, resolver_ip net.IP, baseSourcePort, destPort uint16, paths uint8, timeout time.Duration) ([]string, error) {
 	var wg sync.WaitGroup
 	wg.Add(int(paths))
 	results := make(chan []string)
+	net := "udp"
+	if resolver_ip.To4() != nil {
+		net = "udp4"
+	} else {
+		net = "udp6"
+	}
 	var sourcePort uint16
 	for sourcePort = baseSourcePort; sourcePort < baseSourcePort+uint16(paths); sourcePort++ {
 		go func(sourcePort uint16) {
 			defer wg.Done()
 			client := new(dns.Client)
-			client.Net = "udp"
+			client.Net = net
 			probe := Probe{client: client, qname: qname, qtype: qtype, qclass: qclass, resolver: *resolver, sourcePort: sourcePort, destPort: destPort}
 			nsids, err := probe.Send()
 			if err != nil {
@@ -220,7 +256,13 @@ func ProbeServers(qname string, qtype, qclass uint16, resolver_ip string, baseSo
 func main() {
 	initArgs()
 
-	resolver_ip, err := resolve(resolver)
+	ip_version := 0
+	if *v6 {
+		ip_version = 6
+	} else if *v4 {
+		ip_version = 4
+	}
+	resolver_ip, err := resolve(resolver, ip_version)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -234,7 +276,7 @@ func main() {
 			paths, plural, *resolver, *resolver_ip, dport, sport, timeout)
 	}
 
-	servers, err := ProbeServers(*qname, qtype, qclass, *resolver, sport, dport, paths, timeout)
+	servers, err := ProbeServers(*qname, qtype, qclass, *resolver_ip, sport, dport, paths, timeout)
 	if err != nil {
 		panic(err)
 	}
