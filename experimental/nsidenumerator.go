@@ -221,23 +221,37 @@ func initArgs() {
 	}
 }
 
-func ProbeServers(qname string, qtype, qclass uint16, resolver_ip net.IP, baseSourcePort, destPort uint16, paths uint8, timeout time.Duration) ([]string, error) {
+type NSIDEnumerator struct {
+	qname          string
+	qtype          uint16
+	qclass         uint16
+	resolver       string
+	ipVersion      int
+	baseSourcePort uint16
+	destPort       uint16
+	paths          uint8
+	timeout        time.Duration
+	results        []string
+}
+
+func (n *NSIDEnumerator) Enumerate() error {
+	// start probing
 	var wg sync.WaitGroup
 	wg.Add(int(paths))
 	results := make(chan []string)
 	net := "udp"
-	if resolver_ip.To4() != nil {
+	if n.ipVersion == 4 {
 		net = "udp4"
-	} else {
+	} else if n.ipVersion == 6 {
 		net = "udp6"
 	}
 	var sourcePort uint16
-	for sourcePort = baseSourcePort; sourcePort < baseSourcePort+uint16(paths); sourcePort++ {
+	for sourcePort = n.baseSourcePort; sourcePort < n.baseSourcePort+uint16(n.paths); sourcePort++ {
 		go func(sourcePort uint16) {
 			defer wg.Done()
 			client := new(dns.Client)
 			client.Net = net
-			probe := Probe{client: client, qname: qname, qtype: qtype, qclass: qclass, resolver: *resolver, sourcePort: sourcePort, destPort: destPort}
+			probe := Probe{client: client, qname: n.qname, qtype: n.qtype, qclass: n.qclass, resolver: n.resolver, sourcePort: sourcePort, destPort: n.destPort}
 			nsids, err := probe.Send()
 			if err != nil {
 				log.Print(err)
@@ -256,22 +270,31 @@ func ProbeServers(qname string, qtype, qclass uint16, resolver_ip net.IP, baseSo
 	for nsids := range results {
 		servers = append(servers, nsids...)
 	}
-
-	return removeDuplicates(servers), nil
+	sort.Strings(servers)
+	n.results = removeDuplicates(servers)
+	return nil
 }
 
 func main() {
 	initArgs()
 
-	ip_version := 0
+	ipVersion := 0
 	if *v6 {
-		ip_version = 6
+		ipVersion = 6
 	} else if *v4 {
-		ip_version = 4
+		ipVersion = 4
 	}
-	resolver_ip, err := resolve(resolver, ip_version)
-	if err != nil {
-		log.Fatalf("%v", err)
+
+	nsid := NSIDEnumerator{
+		qname:          *qname,
+		qtype:          qtype,
+		qclass:         qclass,
+		resolver:       *resolver,
+		ipVersion:      ipVersion,
+		baseSourcePort: sport,
+		destPort:       dport,
+		paths:          paths,
+		timeout:        timeout,
 	}
 
 	plural := ""
@@ -279,16 +302,16 @@ func main() {
 		plural = "s"
 	}
 	if !*quiet {
-		log.Printf("Enumerating %d path%s on %s(%s):%d with base source port %d and timeout %v",
-			paths, plural, *resolver, *resolver_ip, dport, sport, timeout)
+		log.Printf("Enumerating %d path%s on %s:%d with base source port %d and timeout %v",
+			nsid.paths, plural, nsid.resolver, nsid.destPort, nsid.baseSourcePort, nsid.timeout)
 	}
 
-	servers, err := ProbeServers(*qname, qtype, qclass, *resolver_ip, sport, dport, paths, timeout)
+	err := nsid.Enumerate()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-	sort.Strings(servers)
-	for idx, nsid := range servers {
+
+	for idx, nsid := range nsid.results {
 		if *quiet {
 			fmt.Println(nsid)
 		} else {
