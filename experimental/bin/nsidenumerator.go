@@ -1,8 +1,7 @@
 package main
 
 import (
-	"context"
-	"encoding/hex"
+	nsidenumerator "../lib"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,47 +9,9 @@ import (
 	"github.com/insomniacslk/dns"
 	"log"
 	"net"
-	"sort"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
-
-func removeDuplicates(elements []string) []string {
-	elemap := make(map[string]bool)
-	var ret []string
-	for _, element := range elements {
-		if _, ok := elemap[element]; !ok {
-			elemap[element] = true
-			ret = append(ret, element)
-		}
-	}
-	return ret
-}
-
-func extractNSIDs(msg *dns.Msg) ([]string, error) {
-	var nsids []string
-	if len(msg.Extra) > 0 {
-		for i := 0; i < len(msg.Extra); i++ {
-			rr := msg.Extra[i]
-			if rr != nil && rr.Header().Rrtype == dns.TypeOPT {
-				opt := (rr).(*dns.OPT)
-				for _, s := range opt.Option {
-					switch e := s.(type) {
-					case *dns.EDNS0_NSID:
-						nsid, err := hex.DecodeString(e.Nsid)
-						if err != nil {
-							return nil, err
-						}
-						nsids = append(nsids, string(nsid))
-					}
-				}
-			}
-		}
-	}
-	return nsids, nil
-}
 
 func resolve(address *string, ip_version int) (*net.IP, error) {
 	if ip_version != 0 && ip_version != 4 && ip_version != 6 {
@@ -94,59 +55,6 @@ func resolve(address *string, ip_version int) (*net.IP, error) {
 		v = fmt.Sprintf("v%d", ip_version)
 	}
 	return nil, errors.New(fmt.Sprintf("No valid IP%v found for %v", v, *address))
-}
-
-type Probe struct {
-	client     *dns.Client
-	qname      string
-	qtype      uint16
-	qclass     uint16
-	resolver   string
-	sourcePort uint16
-	destPort   uint16
-}
-
-func (p *Probe) String() string {
-	return fmt.Sprintf(
-		"Probe(qname='%v', qtype='%v', qclass='%v', resolver='%v', sourcePort=%v, destPort=%v)",
-		p.qname, dns.TypeToString[p.qtype], dns.ClassToString[p.qclass], p.resolver, p.sourcePort, p.destPort,
-	)
-}
-
-func (p *Probe) Send() ([]string, error) {
-	remoteAddr := net.JoinHostPort(p.resolver, strconv.Itoa(int(p.destPort)))
-	msg := &dns.Msg{
-		MsgHdr: dns.MsgHdr{
-			RecursionDesired: true,
-			Opcode:           dns.OpcodeQuery,
-		},
-		Question: make([]dns.Question, 1),
-	}
-	p.client.LocalAddr = &net.UDPAddr{IP: nil, Port: int(p.sourcePort), Zone: ""}
-	opt := &dns.OPT{
-		Hdr: dns.RR_Header{
-			Name:   ".",
-			Rrtype: dns.TypeOPT,
-		},
-	}
-	ext := &dns.EDNS0_NSID{
-		Code: dns.EDNS0NSID,
-	}
-	opt.Option = append(opt.Option, ext)
-	opt.SetUDPSize(dns.DefaultMsgSize)
-	msg.Extra = append(msg.Extra, opt)
-	msg.Question[0] = dns.Question{Name: dns.Fqdn(p.qname), Qtype: p.qtype, Qclass: p.qclass}
-	var ctx context.Context
-	ctx, _ = context.WithTimeout(context.Background(), timeout)
-	resp, _, err := p.client.ExchangeContext(ctx, msg, remoteAddr)
-	if err != nil {
-		log.Fatalf("DNS query failed: %v", err)
-	}
-	nsids, err := extractNSIDs(resp)
-	if err != nil {
-		return nil, err
-	}
-	return nsids, nil
 }
 
 var resolver = flag.String("resolver", "", "The target DNS IP or hostname to send the queries to")
@@ -221,60 +129,6 @@ func initArgs() {
 	}
 }
 
-type NSIDEnumerator struct {
-	qname          string
-	qtype          uint16
-	qclass         uint16
-	resolver       string
-	ipVersion      int
-	baseSourcePort uint16
-	destPort       uint16
-	paths          uint8
-	timeout        time.Duration
-	results        []string
-}
-
-func (n *NSIDEnumerator) Enumerate() error {
-	// start probing
-	var wg sync.WaitGroup
-	wg.Add(int(paths))
-	results := make(chan []string)
-	net := "udp"
-	if n.ipVersion == 4 {
-		net = "udp4"
-	} else if n.ipVersion == 6 {
-		net = "udp6"
-	}
-	var sourcePort uint16
-	for sourcePort = n.baseSourcePort; sourcePort < n.baseSourcePort+uint16(n.paths); sourcePort++ {
-		go func(sourcePort uint16) {
-			defer wg.Done()
-			client := new(dns.Client)
-			client.Net = net
-			probe := Probe{client: client, qname: n.qname, qtype: n.qtype, qclass: n.qclass, resolver: n.resolver, sourcePort: sourcePort, destPort: n.destPort}
-			nsids, err := probe.Send()
-			if err != nil {
-				log.Print(err)
-				return
-			}
-			results <- nsids
-		}(sourcePort)
-	}
-
-	var servers []string
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	for nsids := range results {
-		servers = append(servers, nsids...)
-	}
-	sort.Strings(servers)
-	n.results = removeDuplicates(servers)
-	return nil
-}
-
 func main() {
 	initArgs()
 
@@ -285,16 +139,16 @@ func main() {
 		ipVersion = 4
 	}
 
-	nsid := NSIDEnumerator{
-		qname:          *qname,
-		qtype:          qtype,
-		qclass:         qclass,
-		resolver:       *resolver,
-		ipVersion:      ipVersion,
-		baseSourcePort: sport,
-		destPort:       dport,
-		paths:          paths,
-		timeout:        timeout,
+	nsid := nsidenumerator.NSIDEnumerator{
+		Qname:          *qname,
+		Qtype:          qtype,
+		Qclass:         qclass,
+		Resolver:       *resolver,
+		IpVersion:      ipVersion,
+		BaseSourcePort: sport,
+		DestPort:       dport,
+		Paths:          paths,
+		Timeout:        timeout,
 	}
 
 	plural := ""
@@ -303,15 +157,15 @@ func main() {
 	}
 	if !*quiet {
 		log.Printf("Enumerating %d path%s on %s:%d with base source port %d and timeout %v",
-			nsid.paths, plural, nsid.resolver, nsid.destPort, nsid.baseSourcePort, nsid.timeout)
+			nsid.Paths, plural, nsid.Resolver, nsid.DestPort, nsid.BaseSourcePort, nsid.Timeout)
 	}
 
-	err := nsid.Enumerate()
+	results, err := nsid.Enumerate()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for idx, nsid := range nsid.results {
+	for idx, nsid := range results {
 		if *quiet {
 			fmt.Println(nsid)
 		} else {
