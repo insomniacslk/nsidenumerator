@@ -1,11 +1,9 @@
 package nsidenumerator
 
 import (
-	"context"
 	"encoding/hex"
 	"fmt"
-	// pending https://github.com/miekg/dns/pull/502
-	"github.com/insomniacslk/dns"
+	"github.com/miekg/dns"
 	"log"
 	"net"
 	"strconv"
@@ -62,7 +60,6 @@ func (p *Probe) Send() ([]string, error) {
 		},
 		Question: make([]dns.Question, 1),
 	}
-	p.Client.LocalAddr = &net.UDPAddr{IP: nil, Port: int(p.SourcePort), Zone: ""}
 	opt := &dns.OPT{
 		Hdr: dns.RR_Header{
 			Name:   ".",
@@ -76,9 +73,13 @@ func (p *Probe) Send() ([]string, error) {
 	opt.SetUDPSize(dns.DefaultMsgSize)
 	msg.Extra = append(msg.Extra, opt)
 	msg.Question[0] = dns.Question{Name: dns.Fqdn(p.Qname), Qtype: p.Qtype, Qclass: p.Qclass}
-	var ctx context.Context
-	ctx, _ = context.WithTimeout(context.Background(), p.Timeout)
-	resp, _, err := p.Client.ExchangeContext(ctx, msg, remoteAddr)
+	laddr := net.UDPAddr{IP: nil, Port: int(p.SourcePort), Zone: ""}
+	p.Client = new(dns.Client)
+	p.Client.Dialer = &net.Dialer{
+		Timeout:   p.Timeout,
+		LocalAddr: &laddr,
+	}
+	resp, _, err := p.Client.Exchange(msg, remoteAddr)
 	if err != nil {
 		log.Fatalf("DNS query failed: %v", err)
 	}

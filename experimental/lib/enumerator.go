@@ -1,7 +1,7 @@
 package nsidenumerator
 
 import (
-	"github.com/insomniacslk/dns"
+	"github.com/miekg/dns"
 	"log"
 	"sort"
 	"sync"
@@ -30,6 +30,7 @@ type NSIDEnumerator struct {
 	DestPort       uint16
 	Paths          uint8
 	Timeout        time.Duration
+	Delay          time.Duration
 }
 
 func (n *NSIDEnumerator) Enumerate() ([]string, error) {
@@ -57,6 +58,7 @@ func (n *NSIDEnumerator) Enumerate() ([]string, error) {
 			}
 			results <- nsids
 		}(sourcePort)
+		time.Sleep(n.Delay)
 	}
 
 	var servers []string

@@ -5,8 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	// pending https://github.com/miekg/dns/pull/502
-	"github.com/insomniacslk/dns"
+	"github.com/miekg/dns"
 	"log"
 	"net"
 	"strings"
@@ -63,8 +62,8 @@ var qtype_s = flag.String("qtype", "A", "The DNS query type to use")
 var qtype uint16
 var qclass_s = flag.String("qclass", "IN", "The DNS query class to use")
 var qclass uint16
-var timeout_i = flag.Int("timeout", 1000, "The milliseconds to wait for a DNS response")
-var timeout time.Duration
+var timeout = flag.Int("timeout", 1000, "The milliseconds to wait for a DNS response")
+var delay = flag.Int("delay", 0, "The milliseconds to wait before sending the next probe")
 var sport_i = flag.Int("sport", 12345, "The base source port to use for the probes")
 var sport uint16
 var dport_i = flag.Int("dport", 53, "The destination port to use for the probes")
@@ -105,10 +104,12 @@ func initArgs() {
 		log.Fatalf("Invalid query class: %v", *qclass_s)
 	}
 	qclass = qc
-	if *timeout_i < 1 || *timeout_i > 0xffff {
+	if *timeout < 1 || *timeout > 0xffff {
 		log.Fatalf("Timeout must be a number between 1 and 65535")
 	}
-	timeout = time.Duration(*timeout_i * 1000000)
+	if *delay < 0 || *delay > 0xffff {
+		log.Fatalf("Delay must be a number between 0 and 65535")
+	}
 	if *sport_i < 1 || *sport_i > 0xffff {
 		log.Fatalf("Source port must be a number between 1 and 65535")
 	}
@@ -148,7 +149,8 @@ func main() {
 		BaseSourcePort: sport,
 		DestPort:       dport,
 		Paths:          paths,
-		Timeout:        timeout,
+		Timeout:        time.Millisecond * time.Duration(*timeout),
+		Delay:          time.Millisecond * time.Duration(*delay),
 	}
 
 	plural := ""
@@ -156,8 +158,8 @@ func main() {
 		plural = "s"
 	}
 	if !*quiet {
-		log.Printf("Enumerating %d path%s on %s:%d with base source port %d and timeout %v",
-			nsid.Paths, plural, nsid.Resolver, nsid.DestPort, nsid.BaseSourcePort, nsid.Timeout)
+		log.Printf("Enumerating %d path%s on %s:%d with base source port %d, timeout %v and probing delay %v",
+			nsid.Paths, plural, nsid.Resolver, nsid.DestPort, nsid.BaseSourcePort, nsid.Timeout, nsid.Delay)
 	}
 
 	results, err := nsid.Enumerate()
