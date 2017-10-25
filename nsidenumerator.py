@@ -38,6 +38,14 @@ def parse_args():
     parser.add_argument('-d', '--dport', type=int, default=53,
         help='The UDP destination port to use for the query. '
         'Default: %(default)s')
+    parser.add_argument(
+        '-4', '--ipv4', action='store_true', default=False,
+        help='Resolves target using IPv4. '
+        'Default: %(default)s')
+    parser.add_argument(
+        '-6', '--ipv6', action='store_true', default=False,
+        help='Resolves target using IPv6. '
+        'Default: %(default)s')
     parser.add_argument('-e', '--enumerate', type=int,
         help='Enumerate DNS servers using the specified number of paths. ')
     parser.add_argument(
@@ -74,7 +82,12 @@ def main():
         ipaddress.ip_address(args.target)
         target = args.target
     except ValueError:
-        target = resolve(args.target)
+        if args.ipv4 == True:
+            target = resolve(args.target, 'A')
+        elif args.ipv6 == True:
+            target = resolve(args.target, 'AAAA')
+        else:
+            target = resolve(args.target)
     q = dns.message.make_query(
         args.qname,
         dns.rdatatype.from_text(args.qtype),
