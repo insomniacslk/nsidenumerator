@@ -1,5 +1,7 @@
 # NSID enumerator: show DNS servers behind anycast IPs using NSID
 
+ NOTE: there is a Go implementation in the experimental/ subfolder
+
 As simple as that: run DNS queries towards an anycast-enabled, NSID-enabled DNS server
 (e.g. the root servers) to know what the backend servers are. Leverage ECMP
 (Equal-Cost MultiPath) for the enumeration.
