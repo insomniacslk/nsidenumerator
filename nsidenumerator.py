@@ -16,7 +16,11 @@ import dns.rdatatype
 import dns.rdataclass
 
 
+is_id_server = False
+
+
 def parse_args():
+    global is_id_server
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'target', help='The target DNS server.')
@@ -58,6 +62,9 @@ def parse_args():
         args.qname = 'id.server.'
         args.qtype = 'TXT'
         args.qclass = 'CH'
+    if (args.qname == 'id.server.' or args.qname == 'id.server') and \
+            args.qtype.lower() == 'txt' and args.qclass.lower() == 'ch':
+        is_id_server = True
     return args
 
 
@@ -92,6 +99,7 @@ def main():
     servers = set()
     total_queries = 0
     timeouts = 0
+    server_ids = []
     for sport in range(start_sport, end_sport):
         if args.verbose:
             print('DNS query to {}({}). Qname: {!r}, qtype: {}, '
@@ -120,6 +128,7 @@ def main():
                 id_server = None
             else:
                 id_server = ids[0]
+        server_ids.extend(ids)
         warnings = []
         for opt in response.options:
             if opt.otype == dns.edns.NSID:
@@ -136,6 +145,10 @@ def main():
         print('Found {} servers{}'.format(len(servers), hint))
     for server in sorted(servers):
         print(server)
+    if is_id_server:
+        print('Showing id.server results:')
+        for server_id in sorted(set(server_ids)):
+            print(server_id)
 
     if not args.quiet:
         print()
