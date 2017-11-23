@@ -36,6 +36,30 @@ Percent failed queries : 0.00
     none
 ```
 
+### Server ID
+
+You can specify `-I`/`--id-server` to also specify an id.server payload, i.e. qtype `TXT`, qclass `CHAOS` and qname `id.server.`. This option is useful if the target does not support NSID but it replies to TXT/CHAOS queries. The tool will show additional information:
+
+```
+$ ./nsidenumerator.py -I -e 10 9.9.9.9 
+Warning: using --id-server overrides qname, qclass and qtype
+Enumerating 10 paths
+Found 0 servers (target not supporting NSID?)
+Showing id.server results:
+b'res100.ams.rrdns.pch.net'
+b'res200.ams.rrdns.pch.net'
+b'res300.ams.rrdns.pch.net'
+
+## Statistics
+Total DNS queries      : 10
+Timeouts               : 0
+Percent failed queries : 0.00
+
+## Warnings
+    none
+```
+
+
 ### Single query
 
 One query (hence one path and one backend server), source port 12345, verbose mode:
