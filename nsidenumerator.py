@@ -145,8 +145,12 @@ def main():
         print('Found {} servers{}'.format(len(servers), hint))
     for server in sorted(servers):
         print(server)
+
+    # if id.server is used, also print that information
     if is_id_server:
-        print('Showing id.server results:')
+        print()
+        if not args.quiet:
+            print('Showing id.server results:')
         for server_id in sorted(set(server_ids)):
             print(server_id)
 
