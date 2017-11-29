@@ -48,6 +48,14 @@ def parse_args():
         '-I', '--id-server', action='store_true', default=False,
         help='Run a CHAOS TXT id.server. query along with NSID, and match the '
         'answers')
+    parser.add_argument(
+        '-4', action='store_true', default=False, dest='v4',
+        help='Use the target\'s IPv4 if host name is passed as target',
+    )
+    parser.add_argument(
+        '-6', action='store_true', default=False, dest='v6',
+        help='Use the target\'s IPv6 if host name is passed as target',
+    )
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
             help='Print verbose output. Default: %(default)s')
     parser.add_argument('-q', '--quiet', action='store_true', default=False,
@@ -65,6 +73,13 @@ def parse_args():
     if (args.qname == 'id.server.' or args.qname == 'id.server') and \
             args.qtype.lower() == 'txt' and args.qclass.lower() == 'ch':
         is_id_server = True
+    if args.v4 and args.v6:
+        raise parser.error('-4 and -6 are mutually exclusive')
+    # default to IPv4. This is a sad world
+    if args.v6:
+        args.qtype = 'AAAA'
+    else:
+        args.qtype = 'A'
     return args
 
 
@@ -81,7 +96,7 @@ def main():
         ipaddress.ip_address(args.target)
         target = args.target
     except ValueError:
-        target = resolve(args.target)
+        target = resolve(args.target, args.qtype)
     q = dns.message.make_query(
         args.qname,
         dns.rdatatype.from_text(args.qtype),
