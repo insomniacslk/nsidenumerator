@@ -16,7 +16,11 @@ import dns.rdatatype
 import dns.rdataclass
 
 
+is_id_server = False
+
+
 def parse_args():
+    global is_id_server
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'target', help='The target DNS server.')
@@ -52,6 +56,14 @@ def parse_args():
         '-I', '--id-server', action='store_true', default=False,
         help='Run a CHAOS TXT id.server. query along with NSID, and match the '
         'answers')
+    parser.add_argument(
+        '-4', action='store_true', default=False, dest='v4',
+        help='Use the target\'s IPv4 if host name is passed as target',
+    )
+    parser.add_argument(
+        '-6', action='store_true', default=False, dest='v6',
+        help='Use the target\'s IPv6 if host name is passed as target',
+    )
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
             help='Print verbose output. Default: %(default)s')
     parser.add_argument('-q', '--quiet', action='store_true', default=False,
@@ -66,6 +78,16 @@ def parse_args():
         args.qname = 'id.server.'
         args.qtype = 'TXT'
         args.qclass = 'CH'
+    if (args.qname == 'id.server.' or args.qname == 'id.server') and \
+            args.qtype.lower() == 'txt' and args.qclass.lower() == 'ch':
+        is_id_server = True
+    if args.v4 and args.v6:
+        raise parser.error('-4 and -6 are mutually exclusive')
+    # default to IPv4. This is a sad world
+    if args.v6:
+        args.qtype = 'AAAA'
+    else:
+        args.qtype = 'A'
     return args
 
 
@@ -105,6 +127,7 @@ def main():
     servers = set()
     total_queries = 0
     timeouts = 0
+    server_ids = []
     for sport in range(start_sport, end_sport):
         if args.verbose:
             print('DNS query to {}({}). Qname: {!r}, qtype: {}, '
@@ -133,6 +156,7 @@ def main():
                 id_server = None
             else:
                 id_server = ids[0]
+        server_ids.extend(ids)
         warnings = []
         for opt in response.options:
             if opt.otype == dns.edns.NSID:
@@ -149,6 +173,14 @@ def main():
         print('Found {} servers{}'.format(len(servers), hint))
     for server in sorted(servers):
         print(server)
+
+    # if id.server is used, also print that information
+    if is_id_server:
+        print()
+        if not args.quiet:
+            print('Showing id.server results:')
+        for server_id in sorted(set(server_ids)):
+            print(server_id)
 
     if not args.quiet:
         print()
